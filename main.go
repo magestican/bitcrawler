@@ -5,32 +5,54 @@
 package main
 
 import (
-	"github.com/btcsuite/btcrpcclient"
+	"bytes"
+	"github.com/btcsuite/btcd/wire"
+	"github.com/davecgh/go-spew/spew"
 	"log"
+	"net"
 )
 
-func main() {
-	// Connect to local bitcoin core RPC server using HTTP POST mode.
-	connCfg := &btcrpcclient.ConnConfig{
-		Host:         "localhost:8332",
-		User:         "MyRpcUsername",
-		Pass:         "MyRpcPassword",
-		HTTPPostMode: true, // Bitcoin core only supports HTTP POST mode
-		DisableTLS:   true, // Bitcoin core does not provide TLS by default
-	}
-	// Notice the notification parameter is nil since notifications are
-	// not supported in HTTP POST mode.
-	client, err := btcrpcclient.New(connCfg, nil)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer client.Shutdown()
+//WHAT I WANT TO DO NEXT IS TO USE ANOTHER LIBRARY, AND CONNECT TO LOCALHOST
 
-	// Get the current block count.
-	blockCount, err := client.GetBlockCount()
-	if err != nil {
-		log.Fatal(err)
+func main() {
+
+	tcpAddr := &net.TCPAddr{IP: net.ParseIP("bitseed.xf2.org"), Port: 8333}
+	netAddress, err := wire.NewNetAddress(tcpAddr, wire.SFNodeNetwork)
+	pver := wire.ProtocolVersion
+	btcnet := wire.MainNet
+
+	// Ensure the command is expected value.
+	wantCmd := "addr"
+	msg := wire.NewMsgAddr()
+	if cmd := msg.Command(); cmd != wantCmd {
+		log.Print("NewMsgAddr: wrong command - got %v want %v",
+			cmd, wantCmd)
 	}
-	log.Printf("Block count: %d", blockCount)
+
+	err = msg.AddAddress(netAddress)
+	if err != nil {
+		log.Print("There was an error adding this address")
+	}
+
+	var buf bytes.Buffer
+	err = wire.WriteMessage(&buf, msg, pver, btcnet)
+	if err != nil {
+		log.Print("WriteMessage  error %v", err)
+	}
+
+	rbuf := bytes.NewReader(buf.Bytes())
+
+	resultedBytes, resultMsg, _, err := wire.ReadMessageN(rbuf, pver, btcnet)
+
+	if err != nil {
+		log.Printf("ReadMessage error %v", err)
+	} else {
+		log.Printf("ReadMessage result msg %v",
+			spew.Sdump(resultMsg))
+	}
+
+	if resultedBytes > 0 {
+		log.Print("all good")
+	}
 
 }
